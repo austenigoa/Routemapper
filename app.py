@@ -16,7 +16,7 @@ app.secret_key = 'your_secret_key'
 
 
 import os
-redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+redis_url = redis://red-d302k12dbo4c73b72nt0:6379
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)
 
@@ -258,4 +258,5 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
