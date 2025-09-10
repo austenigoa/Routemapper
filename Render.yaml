@@ -1,20 +1,14 @@
 services:
   - type: web
-    name: flask-web
+    name: routemapper
     env: python
-    buildCommand: ""
-    startCommand: gunicorn app:app
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
     plan: free
-    envVars:
-      - key: REDIS_URL
-        value: <redis://red-d302k12dbo4c73b72nt0:6379>  # Replace with actual Redis URL from Render
 
   - type: worker
-    name: rq-worker
+    name: worker
     env: python
-    buildCommand: ""
+    buildCommand: pip install -r requirements.txt
     startCommand: python worker.py
     plan: free
-    envVars:
-      - key: REDIS_URL
-        value: <redis://red-d302k12dbo4c73b72nt0:6379>  # Same Redis URL
