@@ -1,7 +1,7 @@
 import os
 import redis
 from rq import Worker, Queue
-from rq.connections import Connection
+from rq.connections import Connections
 
 
 listen = ['default']
