@@ -118,6 +118,10 @@ def clean_zip(zip_code):
     return zip_code
 
 def detect_country(zip_code):
+    # Force ZIP 25903 to be treated as Mexico (COA)
+    if zip_code == '25903':
+        return "mx"
+
     if re.match(r'^[A-Z]\d[A-Z] ?\d[A-Z]\d$', zip_code):
         return "ca"
     elif re.match(r'^\d{5}$', zip_code):
@@ -127,6 +131,7 @@ def detect_country(zip_code):
         else:
             return "us"
     return "us"
+
 
 def get_coords(zip_code, country_hint=None):
     cleaned_zip = clean_zip(zip_code)
@@ -260,6 +265,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
