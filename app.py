@@ -171,7 +171,8 @@ def login():
         if request.form['username'] == USERNAME and request.form['password'] == PASSWORD:
             session['logged_in'] = True
             return redirect(url_for('form'))
-   _template_string(login_template)
+    return render_template_string(login_template)
+
 
 @app.route('/form', methods=['GET', 'POST'])
 def form():
@@ -212,3 +213,4 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
