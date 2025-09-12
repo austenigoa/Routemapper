@@ -211,7 +211,7 @@ def generate_map(data):
         PolyLineTextPath(
             line,
             '➤',
-            repeat=True,
+            repeat=False,
             offset=7,
             attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
         ).add_to(m)
@@ -267,6 +267,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
