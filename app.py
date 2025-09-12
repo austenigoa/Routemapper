@@ -163,7 +163,7 @@ def generate_map(data):
     add_routes(collections, "collection")
     add_routes(stock_orders, "stock")
 
-    return m._repr_html_()
+    return m.get_root().render()
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -213,4 +213,5 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
