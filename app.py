@@ -226,16 +226,18 @@ def login():
             return redirect(url_for('form'))
     return render_template_string(login_template)
 
+
 @app.route('/form', methods=['GET', 'POST'])
 def form():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     if request.method == 'POST':
         data = request.form['data']
-        job = q.enqueue(generate_map, data)
+        job = q.enqueue(generate_map, data, job_timeout=20000)  # <-- Timeout added here
         session['job_id'] = job.id
         return redirect(url_for('status'))
     return render_template_string(form_template)
+
 
 @app.route('/status')
 def status():
