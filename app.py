@@ -47,20 +47,12 @@ form_template = """
 """
 
 map_template = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Delivery Route Map</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-    <h2>Delivery Route Map</h2>
-    {{ map_html | safe }}
-    <br>
-    <a href='{{ url_for("form") }}'>Back</a>
-</body>
-</html>
+<!doctype html>
+<title>Delivery Route Map</title>
+<h2>Delivery Route Map</h2>
+<div>{{ map_html|safe }}</div>
+<br>
+<a href='{{ url_for("form") }}'>Back</a>
 """
 
 processing_template = """
@@ -199,7 +191,49 @@ def generate_map(data):
                 icon=folium.Icon(color='gray', icon='building', prefix='fa')
             ).add_to(m)
 
+    
+    delivery_group = folium.FeatureGroup(name="Delivery")
+    collection_group = folium.FeatureGroup(name="Collection")
+    stock_group = folium.FeatureGroup(name="Stock Order")
+
     for origin, dest, delivery_number in routes:
+        if delivery_number.startswith("37"):
+            group = collection_group
+        elif delivery_number.startswith("368"):
+            group = stock_group
+        elif delivery_number.startswith("369") or delivery_number.startswith("34"):
+            group = delivery_group
+        else:
+            group = folium.FeatureGroup(name="Other")
+
+        origin_icon = CustomIcon(
+            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            icon_size=(12, 20)
+        )
+        dest_icon = CustomIcon(
+            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+            icon_size=(12, 20)
+        )
+
+        group.add_child(folium.Marker(location=origin, popup='Origin', icon=origin_icon))
+        group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
+
+        line = folium.PolyLine([origin, dest], color='blue', weight=3)
+        folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
+        group.add_child(line)
+
+        PolyLineTextPath(
+            line,
+            '➤',
+            repeat=False,
+            offset=7,
+            attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
+        ).add_to(group)
+
+    delivery_group.add_to(m)
+    collection_group.add_to(m)
+    stock_group.add_to(m)
+
         origin_icon = CustomIcon(
             icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
             icon_size=(12, 20)
@@ -224,7 +258,8 @@ def generate_map(data):
             attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
         ).add_to(m)
 
-    return m._repr_html_()
+    folium.LayerControl().add_to(m)
+    return m.get_root().render()
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -275,6 +310,5 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
 
 
