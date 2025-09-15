@@ -47,12 +47,20 @@ form_template = """
 """
 
 map_template = """
-<!doctype html>
-<title>Delivery Route Map</title>
-<h2>Delivery Route Map</h2>
-<div>{{ map_html|safe }}</div>
-<br>
-<a href='{{ url_for("form") }}'>Back</a>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delivery Route Map</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <h2>Delivery Route Map</h2>
+    {{ map_html | safe }}
+    <br>
+    <a href='{{ url_for("form") }}'>Back</a>
+</body>
+</html>
 """
 
 processing_template = """
@@ -155,66 +163,8 @@ def get_coords(zip_code, country_hint=None):
     return None
 
 def generate_map(data):
-    collections, stock_orders, deliveries = [], [], []
+    routes = []
     seen_pairs = set()
-    f = StringIO(data)
-    reader = csv.reader(f)
-    for row in reader:
-        if len(row) >= 3:
-            origin_zip = clean_zip(row[0])
-            dest_zip = clean_zip(row[1])
-            delivery_number = row[2].strip()
-            origin_country = row[3].strip().lower() if len(row) > 3 else None
-            dest_country = row[4].strip().lower() if len(row) > 4 else None
-            pair_key = (origin_zip, dest_zip, delivery_number)
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
-            origin_coords = get_coords(origin_zip, origin_country)
-            dest_coords = get_coords(dest_zip, dest_country)
-            if origin_coords and dest_coords:
-                if delivery_number.startswith("37"):
-                    collections.append((origin_coords, dest_coords, delivery_number))
-                elif delivery_number.startswith("368"):
-                    stock_orders.append((origin_coords, dest_coords, delivery_number))
-                elif delivery_number.startswith("369") or delivery_number.startswith("34"):
-                    deliveries.append((origin_coords, dest_coords, delivery_number))
-
-    m = folium.Map(location=[39.5, -98.35], zoom_start=4)
-
-    delivery_group = folium.FeatureGroup(name="Delivery")
-    collection_group = folium.FeatureGroup(name="Collection")
-    stock_group = folium.FeatureGroup(name="Stock Order")
-
-    def add_routes(route_list, group):
-        for origin, dest, delivery_number in route_list:
-            origin_icon = CustomIcon(
-                icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-                icon_size=(12, 20)
-            )
-            dest_icon = CustomIcon(
-                icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-                icon_size=(12, 20)
-            )
-            group.add_child(folium.Marker(location=origin, popup='Origin', icon=origin_icon))
-            group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
-            line = folium.PolyLine([origin, dest], color='blue', weight=3)
-            folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
-            group.add_child(line)
-            PolyLineTextPath(line, '➤', repeat=False, offset=7,
-                attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}).add_to(group)
-
-    add_routes(deliveries, delivery_group)
-    add_routes(collections, collection_group)
-    add_routes(stock_orders, stock_group)
-
-    delivery_group.add_to(m)
-    collection_group.add_to(m)
-    stock_group.add_to(m)
-
-    folium.LayerControl().add_to(m)
-
-    return m._repr_html_()
 
     f = StringIO(data)
     reader = csv.reader(f)
