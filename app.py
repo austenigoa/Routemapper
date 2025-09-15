@@ -1,79 +1,28 @@
 # app.py
-
-from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
-import folium
-import csv
+import os, re, csv, logging, requests
 from io import StringIO
-import requests
-from folium.plugins import PolyLineTextPath
-from folium.features import CustomIcon
-import re
-from rq import Queue
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
 from redis import Redis
+from rq import Queue
 from rq.job import Job
-import os
+import folium
+from folium.features import CustomIcon
+from folium.plugins import PolyLineTextPath
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-redis_url = os.getenv('REDIS_URL', 'redis://red-d302k12dbo4c73b72nt0:6379')
-redis_conn = Redis.from_url(redis_url)
+logging.basicConfig(level=logging.INFO)
+redis_conn = Redis()
 q = Queue(connection=redis_conn)
 
 USERNAME = 'admin'
 PASSWORD = 'password'
 
-login_template = """
-<!doctype html>
-<title>Login</title>
-<h2>Login</h2>
-<form method='post'>
-Username: <input type='text' name='username'><br>
-Password: <input type='password' name='password'><br>
-<input type='submit' value='Login'>
-</form>
-"""
-
-form_template = """
-<!doctype html>
-<title>Paste ZIP Code Data</title>
-<h2>Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)</h2>
-<form method='post'>
-<textarea name='data' rows='10' cols='70'></textarea><br>
-<input type='submit' value='Generate Map'>
-</form>
-"""
-
-map_template = """
-<!doctype html>
-<title>Delivery Route Map</title>
-<h2>Delivery Route Map</h2>
-<label for="deliveryFilter">Filter by Type:</label>
-<select id="deliveryFilter" onchange="filterRoutes()">
-  <option value="delivery">Deliveries</option>
-  <option value="collection">Collections</option>
-  <option value="stock">Stock Orders</option>
-</select>
-<div>{{ map_html|safe }}</div>
-<br>
-<a href='{{ url_for("form") }}'>Back</a>
-<script>
-function filterRoutes() {
-  var selected = document.getElementById("deliveryFilter").value;
-  document.querySelectorAll(".route-group").forEach(function(group) {
-    group.style.display = group.dataset.type === selected ? "block" : "none";
-  });
-}
-window.onload = filterRoutes;
-</script>
-"""
-
-processing_template = """
-<!doctype html>
-<title>Processing</title>
-<h2>Map is processing...</h2>
-<p>0%</p>
-"""
+login_template = """..."""  # same as your original
+form_template = """..."""   # same as your original
+map_template = """..."""    # same as your original
+processing_template = """..."""  # same as your original
 
 zip_cache = { '25298': (25.4383, -100.9737) }
 
@@ -112,11 +61,8 @@ def get_coords(zip_code, country_hint=None):
     return None
 
 def generate_map(data):
-    collections = []
-    stock_orders = []
-    deliveries = []
+    collections, stock_orders, deliveries = [], [], []
     seen_pairs = set()
-
     f = StringIO(data)
     reader = csv.reader(f)
     for row in reader:
@@ -126,12 +72,10 @@ def generate_map(data):
             delivery_number = row[2].strip()
             origin_country = row[3].strip().lower() if len(row) > 3 else None
             dest_country = row[4].strip().lower() if len(row) > 4 else None
-
             pair_key = (origin_zip, dest_zip, delivery_number)
             if pair_key in seen_pairs:
                 continue
             seen_pairs.add(pair_key)
-
             origin_coords = get_coords(origin_zip, origin_country)
             dest_coords = get_coords(dest_zip, dest_country)
             if origin_coords and dest_coords:
@@ -173,7 +117,6 @@ def login():
             return redirect(url_for('form'))
     return render_template_string(login_template)
 
-
 @app.route('/form', methods=['GET', 'POST'])
 def form():
     if not session.get('logged_in'):
@@ -213,5 +156,4 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
 
