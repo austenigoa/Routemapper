@@ -155,12 +155,14 @@ def get_coords(zip_code, country_hint=None):
     return None
 
 def generate_map(data):
+    print("Starting map generation...")
     routes = []
     seen_pairs = set()
 
     f = StringIO(data)
     reader = csv.reader(f)
     for row in reader:
+        print(f"Processing row: {row}")
         if len(row) >= 3:
             origin_zip = clean_zip(row[0])
             dest_zip = clean_zip(row[1])
@@ -175,8 +177,11 @@ def generate_map(data):
 
             origin_coords = get_coords(origin_zip, origin_country)
             dest_coords = get_coords(dest_zip, dest_country)
+            print(f"Coords: {origin_coords} -> {dest_coords}")
             if origin_coords and dest_coords:
                 routes.append((origin_coords, dest_coords, delivery_number))
+
+    print(f"Total routes: {len(routes)}")
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
@@ -241,7 +246,9 @@ def generate_map(data):
     # Add layer control
     folium.LayerControl(collapsed=False).add_to(m)
 
+    print("Map generation complete.")
     return m.get_root().render()
+
 
 
 
@@ -298,6 +305,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
