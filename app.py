@@ -287,9 +287,13 @@ def status():
     if job.is_finished:
         if not job.result:
             return "<h2>Job finished but returned no result.</h2>"
-        return render_template_string(map_template, map_html=job.result)
-    else:
-        return render_template_string(processing_template)
+        return f"""
+            <h2>Map Ready</h2>
+            <a href="{job.result}" target="_blank">View Map</a><br><br>
+            <a href="{url_for('form')}">Back</a>
+        """
+    return render_template_string(processing_template)
+
 
 @app.route('/job_status')
 def job_status():
@@ -306,6 +310,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
