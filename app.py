@@ -178,45 +178,73 @@ def generate_map(data):
             if origin_coords and dest_coords:
                 routes.append((origin_coords, dest_coords, delivery_number))
 
-    m = folium.Map(location=[39.5, -98.35], zoom_start=4)
+m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    for zip_code in always_visible_zips:
-        cleaned_zip = clean_zip(zip_code)
-        country_hint = facility_zip_countries.get(cleaned_zip, 'us')
-        coords = get_coords(cleaned_zip, country_hint)
-        if coords:
-            folium.Marker(
-                location=coords,
-                popup=f'Facility: {cleaned_zip}',
-                icon=folium.Icon(color='gray', icon='building', prefix='fa')
-            ).add_to(m)
-
-    for origin, dest, delivery_number in routes:
-        origin_icon = CustomIcon(
-            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-            icon_size=(12, 20)
-        )
-        dest_icon = CustomIcon(
-            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-            icon_size=(12, 20)
-        )
-
-        folium.Marker(location=origin, popup='Origin', icon=origin_icon).add_to(m)
-        folium.Marker(location=dest, popup='Destination', icon=dest_icon).add_to(m)
-
-        line = folium.PolyLine([origin, dest], color='blue', weight=3)
-        folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
-        m.add_child(line)
-
-        PolyLineTextPath(
-            line,
-            '➤',
-            repeat=False,
-            offset=7,
-            attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
+# Always-visible facility markers
+for zip_code in always_visible_zips:
+    cleaned_zip = clean_zip(zip_code)
+    country_hint = facility_zip_countries.get(cleaned_zip, 'us')
+    coords = get_coords(cleaned_zip, country_hint)
+    if coords:
+        folium.Marker(
+            location=coords,
+            popup=f'Facility: {cleaned_zip}',
+            icon=folium.Icon(color='gray', icon='building', prefix='fa')
         ).add_to(m)
 
-    return m._repr_html_()
+# Create FeatureGroups for each route type
+delivery_group = folium.FeatureGroup(name="Delivery")
+collection_group = folium.FeatureGroup(name="Collection")
+stock_group = folium.FeatureGroup(name="Stock Order")
+other_group = folium.FeatureGroup(name="Other")
+
+# Add routes to appropriate groups
+for origin, dest, delivery_number in routes:
+    if delivery_number.startswith("37"):
+        group = collection_group
+    elif delivery_number.startswith("368"):
+        group = stock_group
+    elif delivery_number.startswith("369") or delivery_number.startswith("34"):
+        group = delivery_group
+    else:
+        group = other_group
+
+    origin_icon = CustomIcon(
+        icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+        icon_size=(12, 20)
+    )
+    dest_icon = CustomIcon(
+        icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+        icon_size=(12, 20)
+    )
+
+    group.add_child(folium.Marker(location=origin, popup='Origin', icon=origin_icon))
+    group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
+
+    line = folium.PolyLine([origin, dest], color='blue', weight=3)
+    folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
+    group.add_child(line)
+
+    PolyLineTextPath(
+        line,
+        '➤',
+        repeat=False,
+        offset=7,
+        attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
+    ).add_to(group)
+
+# Add all groups to the map
+collection_group.add_to(m)
+delivery_group.add_to(m)
+stock_group.add_to(m)
+other_group.add_to(m)
+
+# Add layer control
+folium.LayerControl(collapsed=False).add_to(m)
+
+# Return rendered HTML
+return m.get_root().render()
+
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -267,6 +295,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
