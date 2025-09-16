@@ -274,7 +274,11 @@ def status():
     if not job_id:
         return "<h2>No job found.</h2>"
     job = Job.fetch(job_id, connection=redis_conn)
+    if job.is_failed:
+        return f"<h2>Job failed:</h2><pre>{job.exc_info}</pre>"
     if job.is_finished:
+        if not job.result:
+            return "<h2>Job finished but returned no result.</h2>"
         return render_template_string(map_template, map_html=job.result)
     else:
         return render_template_string(processing_template)
@@ -294,6 +298,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
