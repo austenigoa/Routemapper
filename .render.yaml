@@ -1,14 +1,12 @@
 services:
   - type: web
-    name: routemapper
+    name: routemapper-web
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    plan: free
+    startCommand: gunicorn app:app
 
   - type: worker
-    name: worker
+    name: routemapper-worker
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python worker.py
-    plan: free
+    startCommand: python Worker.py
