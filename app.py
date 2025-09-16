@@ -55,6 +55,7 @@ map_template = """
 <a href='{{ url_for("form") }}'>Back</a>
 """
 
+
 processing_template = """
 <!doctype html>
 <title>Processing</title>
@@ -305,6 +306,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
