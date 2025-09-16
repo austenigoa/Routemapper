@@ -16,18 +16,9 @@ app.secret_key = 'your_secret_key'
 
 
 import os
-from redis import Redis
-from rq import Queue
-
-# Redis setup
 redis_url = os.getenv('REDIS_URL', 'redis://red-d302k12dbo4c73b72nt0:6379')
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)
-
-# Ensure the static/maps directory exists
-map_dir = os.path.join("static", "maps")
-os.makedirs(map_dir, exist_ok=True)
-
 
 
 
@@ -63,7 +54,6 @@ map_template = """
 <br>
 <a href='{{ url_for("form") }}'>Back</a>
 """
-
 
 processing_template = """
 <!doctype html>
@@ -165,14 +155,12 @@ def get_coords(zip_code, country_hint=None):
     return None
 
 def generate_map(data):
-    print("Starting map generation...")
     routes = []
     seen_pairs = set()
 
     f = StringIO(data)
     reader = csv.reader(f)
     for row in reader:
-        print(f"Processing row: {row}")
         if len(row) >= 3:
             origin_zip = clean_zip(row[0])
             dest_zip = clean_zip(row[1])
@@ -187,15 +175,11 @@ def generate_map(data):
 
             origin_coords = get_coords(origin_zip, origin_country)
             dest_coords = get_coords(dest_zip, dest_country)
-            print(f"Coords: {origin_coords} -> {dest_coords}")
             if origin_coords and dest_coords:
                 routes.append((origin_coords, dest_coords, delivery_number))
 
-    print(f"Total routes: {len(routes)}")
-
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # Always-visible facility markers
     for zip_code in always_visible_zips:
         cleaned_zip = clean_zip(zip_code)
         country_hint = facility_zip_countries.get(cleaned_zip, 'us')
@@ -207,22 +191,7 @@ def generate_map(data):
                 icon=folium.Icon(color='gray', icon='building', prefix='fa')
             ).add_to(m)
 
-    # Create FeatureGroups
-    delivery_group = folium.FeatureGroup(name="Delivery")
-    collection_group = folium.FeatureGroup(name="Collection")
-    stock_group = folium.FeatureGroup(name="Stock Order")
-    other_group = folium.FeatureGroup(name="Other")
-
     for origin, dest, delivery_number in routes:
-        if delivery_number.startswith("37"):
-            group = collection_group
-        elif delivery_number.startswith("368"):
-            group = stock_group
-        elif delivery_number.startswith("369") or delivery_number.startswith("34"):
-            group = delivery_group
-        else:
-            group = other_group
-
         origin_icon = CustomIcon(
             icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
             icon_size=(12, 20)
@@ -232,12 +201,12 @@ def generate_map(data):
             icon_size=(12, 20)
         )
 
-        group.add_child(folium.Marker(location=origin, popup='Origin', icon=origin_icon))
-        group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
+        folium.Marker(location=origin, popup='Origin', icon=origin_icon).add_to(m)
+        folium.Marker(location=dest, popup='Destination', icon=dest_icon).add_to(m)
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
         folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
-        group.add_child(line)
+        m.add_child(line)
 
         PolyLineTextPath(
             line,
@@ -245,22 +214,9 @@ def generate_map(data):
             repeat=False,
             offset=7,
             attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
-        ).add_to(group)
+        ).add_to(m)
 
-    # Add groups to map
-    collection_group.add_to(m)
-    delivery_group.add_to(m)
-    stock_group.add_to(m)
-    other_group.add_to(m)
-
-    # Add layer control
-    folium.LayerControl(collapsed=False).add_to(m)
-
-    print("Map generation complete.")
-    return m.get_root().render()
-
-
-
+    return m._repr_html_()
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -291,18 +247,10 @@ def status():
     if not job_id:
         return "<h2>No job found.</h2>"
     job = Job.fetch(job_id, connection=redis_conn)
-    if job.is_failed:
-        return f"<h2>Job failed:</h2><pre>{job.exc_info}</pre>"
     if job.is_finished:
-        if not job.result:
-            return "<h2>Job finished but returned no result.</h2>"
-        return f"""
-            <h2>Map Ready</h2>
-            <a href="{job.result}" target="_blank">View Map</a><br><br>
-            <a href="{url_for('form')}">Back</a>
-        """
-    return render_template_string(processing_template)
-
+        return render_template_string(map_template, map_html=job.result)
+    else:
+        return render_template_string(processing_template)
 
 @app.route('/job_status')
 def job_status():
