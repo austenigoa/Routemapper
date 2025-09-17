@@ -166,7 +166,8 @@ def get_coords(zip_code, country_hint=None):
 
 def generate_map(data):
     print("Starting map generation...")
-    route_groups = defaultdict(list)
+    routes = []
+    seen_pairs = set()
 
     f = StringIO(data)
     reader = csv.reader(f)
@@ -179,14 +180,18 @@ def generate_map(data):
             origin_country = row[3].strip().lower() if len(row) > 3 else None
             dest_country = row[4].strip().lower() if len(row) > 4 else None
 
+            pair_key = (origin_zip, dest_zip, delivery_number)
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
             origin_coords = get_coords(origin_zip, origin_country)
             dest_coords = get_coords(dest_zip, dest_country)
             print(f"Coords: {origin_coords} -> {dest_coords}")
             if origin_coords and dest_coords:
-                key = (origin_coords, dest_coords)
-                route_groups[key].append(delivery_number)
+                routes.append((origin_coords, dest_coords, delivery_number))
 
-    print(f"Total unique routes: {len(route_groups)}")
+    print(f"Total routes: {len(routes)}")
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
@@ -208,13 +213,12 @@ def generate_map(data):
     stock_group = folium.FeatureGroup(name="Stock Order")
     other_group = folium.FeatureGroup(name="Other")
 
-    for (origin, dest), delivery_numbers in route_groups.items():
-        first_delivery = delivery_numbers[0]
-        if first_delivery.startswith("37"):
+    for origin, dest, delivery_number in routes:
+        if delivery_number.startswith("37"):
             group = collection_group
-        elif first_delivery.startswith("368"):
+        elif delivery_number.startswith("368"):
             group = stock_group
-        elif first_delivery.startswith("369") or first_delivery.startswith("34"):
+        elif delivery_number.startswith("369") or delivery_number.startswith("34"):
             group = delivery_group
         else:
             group = other_group
@@ -232,8 +236,7 @@ def generate_map(data):
         group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
-        popup_text = f'Delivery #s: {", ".join(delivery_numbers)}'
-        folium.Popup(popup_text, max_width=300).add_to(line)
+        folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
         group.add_child(line)
 
         PolyLineTextPath(
@@ -316,7 +319,6 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
 
 
 
