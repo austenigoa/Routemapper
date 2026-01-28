@@ -110,9 +110,7 @@ zip_cache = {
 }
 
 always_visible_zips = [
-    '95358', '25315', '76120', '78550', '40160',
-    '28208', '30103', '17011', '48150',
-    '54937', '55121', 'N3S 7P8'
+    '40202', '48134', '83000', '54800'
 ]
 
 facility_zip_countries = {
@@ -316,6 +314,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
