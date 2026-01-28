@@ -109,7 +109,7 @@ zip_cache = {
     '25298': (25.4383, -100.9737)
 }
 
-always_visible_zips = [
+always_visible_ford_zips = [
     '40202', '48134', '83000', '54800'
 ]
 
@@ -117,6 +117,18 @@ facility_zip_countries = {
     '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx',
 }
 
+always_visible_plants = [
+    '95358', '25315', '76120', '78550', '40160',
+    '28208', '30103', '17011', '48150',
+    '54937', '55121', 'N3S 7P8'
+]
+
+facility_zip_plantcountries = {
+    '95358': 'us', '25315': 'mx', '76120': 'mx', '35403': 'us',
+    '78550': 'us', '40160': 'us', '28208': 'us', '30103': 'us',
+    '18640': 'us', '37122': 'us', '17011': 'us', '48150': 'us',
+    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
+}
 def clean_zip(zip_code):
     zip_code = zip_code.strip().upper().replace('"', '').replace("'", '')
     zip_code = re.sub(r'\s+', ' ', zip_code)
@@ -191,7 +203,7 @@ def generate_map(data):
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
     # Always-visible facility markers
-    for zip_code in always_visible_zips:
+    for zip_code in always_visible_ford_zips:
         cleaned_zip = clean_zip(zip_code)
         country_hint = facility_zip_countries.get(cleaned_zip, 'us')
         coords = get_coords(cleaned_zip, country_hint)
@@ -199,8 +211,20 @@ def generate_map(data):
             folium.Marker(
                 location=coords,
                 popup=f'Facility: {cleaned_zip}',
-                icon=folium.Icon(color='gray', icon='building', prefix='fa')
+                icon=folium.Icon(color='blue', icon='Truck', prefix='fa')
             ).add_to(m)
+          
+     for zip_code in always_visible_plants:
+        cleaned_zip = clean_zip(zip_code)
+        country_hint = facility_zip_plantcountries.get(cleaned_zip, 'us')
+        coords = get_coords(cleaned_zip, country_hint)
+        if coords:
+            folium.Marker(
+                location=coords,
+                popup=f'Facility: {cleaned_zip}',
+                icon=folium.Icon(color='gray', icon='Building', prefix='fa')
+            ).add_to(m)
+  
 
     # Create FeatureGroups
     delivery_group = folium.FeatureGroup(name="Delivery")
@@ -314,6 +338,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
