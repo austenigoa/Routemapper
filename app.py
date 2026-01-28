@@ -116,10 +116,7 @@ always_visible_zips = [
 ]
 
 facility_zip_countries = {
-    '95358': 'us', '25315': 'mx', '76120': 'mx', '35403': 'us',
-    '78550': 'us', '40160': 'us', '28208': 'us', '30103': 'us',
-    '18640': 'us', '37122': 'us', '17011': 'us', '48150': 'us',
-    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
+    '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx',
 }
 
 def clean_zip(zip_code):
@@ -319,6 +316,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
