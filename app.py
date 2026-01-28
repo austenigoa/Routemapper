@@ -231,7 +231,7 @@ def generate_map(data):
         group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
-        folium.Popup(f'Delivery #: {delivery_number}', max_width=300).add_to(line)
+        folium.Popup(f'Delivery #: {delivery_number}', max_width=300, show=True).add_to(line)
         group.add_child(line)
 
         PolyLineTextPath(
@@ -314,6 +314,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
