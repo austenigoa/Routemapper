@@ -129,6 +129,7 @@ facility_zip_plantcountries = {
     '18640': 'us', '37122': 'us', '17011': 'us', '48150': 'us',
     '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
 }
+
 def clean_zip(zip_code):
     zip_code = zip_code.strip().upper().replace('"', '').replace("'", '')
     zip_code = re.sub(r'\s+', ' ', zip_code)
@@ -338,6 +339,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
