@@ -31,47 +31,47 @@ USERNAME = 'admin'
 PASSWORD = 'password'
 
 login_template = """
-&lt;!doctype html&gt;
-&lt;title&gt;Login&lt;/title&gt;
-&lt;h2&gt;Login&lt;/h2&gt;
-&lt;form method='post'&gt;
-  Username: &lt;input type='text' name='username'&gt;&lt;br&gt;
-  Password: &lt;input type='password' name='password'&gt;&lt;br&gt;
-  &lt;input type='submit' value='Login'&gt;
-&lt;/form&gt;
+<;!doctype html>;
+<;title>;Login<;/title>;
+<;h2>;Login<;/h2>;
+<;form method='post'>;
+  Username: <;input type='text' name='username'>;<;br>;
+  Password: <;input type='password' name='password'>;<;br>;
+  <;input type='submit' value='Login'>;
+<;/form>;
 """
 
 form_template = """
-&lt;!doctype html&gt;
-&lt;title&gt;Paste ZIP Code Data&lt;/title&gt;
-&lt;h2&gt;Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)&lt;/h2&gt;
-&lt;form method='post'&gt;
-  &lt;textarea name='data' rows='10' cols='70'&gt;&lt;/textarea&gt;&lt;br&gt;
-  &lt;input type='submit' value='Generate Map'&gt;
-&lt;/form&gt;
+<;!doctype html>;
+<;title>;Paste ZIP Code Data<;/title>;
+<;h2>;Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)<;/h2>;
+<;form method='post'>;
+  <;textarea name='data' rows='10' cols='70'>;<;/textarea>;<;br>;
+  <;input type='submit' value='Generate Map'>;
+<;/form>;
 """
 
 map_template = """
-&lt;!doctype html&gt;
-&lt;title&gt;Delivery Route Map&lt;/title&gt;
-&lt;h2&gt;Delivery Route Map&lt;/h2&gt;
-&lt;div&gt;{{ map_html|safe }}&lt;/div&gt;
-&lt;br&gt;
-&lt;a href='{{ url_for("form") }}'&gt;Back&lt;/a&gt;
+<;!doctype html>;
+<;title>;Delivery Route Map<;/title>;
+<;h2>;Delivery Route Map<;/h2>;
+<;div>;{{ map_html|safe }}<;/div>;
+<;br>;
+<;a href='{{ url_for("form") }}'>;Back<;/a>;
 """
 
 processing_template = """
-&lt;!doctype html&gt;
-&lt;title&gt;Processing&lt;/title&gt;
-&lt;h2&gt;Map is processing...&lt;/h2&gt;
-&lt;div id="progress-bar" style="width: 100%; background-color: #f3f3f3;"&gt;
-  &lt;div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white;"&gt;0%&lt;/div&gt;
-&lt;/div&gt;
+<;!doctype html>;
+<;title>;Processing<;/title>;
+<;h2>;Map is processing...<;/h2>;
+<;div id="progress-bar" style="width: 100%; background-color: #f3f3f3;">;
+  <;div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white;">;0%<;/div>;
+<;/div>;
 
-&lt;script&gt;
+<;script>;
 let progress = 0;
 function updateProgressBar() {
-    if (progress &lt; 90) {
+    if (progress <; 90) {
         progress += 10;
         document.getElementById("progress").style.width = progress + "%";
         document.getElementById("progress").innerText = progress + "%";
@@ -80,8 +80,8 @@ function updateProgressBar() {
 
 function checkStatus() {
     fetch("/job_status")
-        .then(response =&gt; response.json())
-        .then(data =&gt; {
+        .then(response =>; response.json())
+        .then(data =>; {
             if (data.status === 'finished') {
                 document.getElementById("progress").style.width = "100%";
                 document.getElementById("progress").innerText = "100%";
@@ -97,7 +97,7 @@ function checkStatus() {
 }
 
 checkStatus();
-&lt;/script&gt;
+<;/script>;
 """
 
 zip_cache = {
@@ -309,18 +309,18 @@ def status():
         return redirect(url_for('login'))
     job_id = session.get('job_id')
     if not job_id:
-        return "&lt;h2&gt;No job found.&lt;/h2&gt;"
+        return "<;h2>;No job found.<;/h2>;"
     job = Job.fetch(job_id, connection=redis_conn)
     if job.is_failed:
-        return f"&lt;h2&gt;Job failed:&lt;/h2&gt;&lt;pre&gt;{job.exc_info}&lt;/pre&gt;"
+        return f"<;h2>;Job failed:<;/h2>;<;pre>;{job.exc_info}<;/pre>;"
     if job.is_finished:
         if not job.result:
-            return "&lt;h2&gt;Job finished but returned no result.&lt;/h2&gt;"
+            return "<;h2>;Job finished but returned no result.<;/h2>;"
         # NOTE: job.result is HTML, not a URL. We can render it here instead of linking to it.
         return f"""
-            &lt;h2&gt;Map Ready&lt;/h2&gt;
-            &lt;div&gt;{job.result}&lt;/div&gt;
-            &lt;br&gt;&lt;a href="{url_for('form')}"&gt;Back&lt;/a&gt;
+            <;h2>;Map Ready<;/h2>;
+            <;div>;{job.result}<;/div>;
+            <;br>;<;a href="{url_for('form')}">;Back<;/a>;
         """
     return render_template_string(processing_template)
 
@@ -339,6 +339,7 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
