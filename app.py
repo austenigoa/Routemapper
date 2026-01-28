@@ -14,7 +14,6 @@ from rq.job import Job
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-
 import os
 from redis import Redis
 from rq import Queue
@@ -28,55 +27,51 @@ q = Queue(connection=redis_conn)
 map_dir = os.path.join("static", "maps")
 os.makedirs(map_dir, exist_ok=True)
 
-
-
-
 USERNAME = 'admin'
 PASSWORD = 'password'
 
 login_template = """
-<!doctype html>
-<title>Login</title>
-<h2>Login</h2>
-<form method='post'>
-  Username: <input type='text' name='username'><br>
-  Password: <input type='password' name='password'><br>
-  <input type='submit' value='Login'>
-</form>
+&lt;!doctype html&gt;
+&lt;title&gt;Login&lt;/title&gt;
+&lt;h2&gt;Login&lt;/h2&gt;
+&lt;form method='post'&gt;
+  Username: &lt;input type='text' name='username'&gt;&lt;br&gt;
+  Password: &lt;input type='password' name='password'&gt;&lt;br&gt;
+  &lt;input type='submit' value='Login'&gt;
+&lt;/form&gt;
 """
 
 form_template = """
-<!doctype html>
-<title>Paste ZIP Code Data</title>
-<h2>Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)</h2>
-<form method='post'>
-  <textarea name='data' rows='10' cols='70'></textarea><br>
-  <input type='submit' value='Generate Map'>
-</form>
+&lt;!doctype html&gt;
+&lt;title&gt;Paste ZIP Code Data&lt;/title&gt;
+&lt;h2&gt;Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)&lt;/h2&gt;
+&lt;form method='post'&gt;
+  &lt;textarea name='data' rows='10' cols='70'&gt;&lt;/textarea&gt;&lt;br&gt;
+  &lt;input type='submit' value='Generate Map'&gt;
+&lt;/form&gt;
 """
 
 map_template = """
-<!doctype html>
-<title>Delivery Route Map</title>
-<h2>Delivery Route Map</h2>
-<div>{{ map_html|safe }}</div>
-<br>
-<a href='{{ url_for("form") }}'>Back</a>
+&lt;!doctype html&gt;
+&lt;title&gt;Delivery Route Map&lt;/title&gt;
+&lt;h2&gt;Delivery Route Map&lt;/h2&gt;
+&lt;div&gt;{{ map_html|safe }}&lt;/div&gt;
+&lt;br&gt;
+&lt;a href='{{ url_for("form") }}'&gt;Back&lt;/a&gt;
 """
 
-
 processing_template = """
-<!doctype html>
-<title>Processing</title>
-<h2>Map is processing...</h2>
-<div id="progress-bar" style="width: 100%; background-color: #f3f3f3;">
-  <div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white;">0%</div>
-</div>
+&lt;!doctype html&gt;
+&lt;title&gt;Processing&lt;/title&gt;
+&lt;h2&gt;Map is processing...&lt;/h2&gt;
+&lt;div id="progress-bar" style="width: 100%; background-color: #f3f3f3;"&gt;
+  &lt;div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white;"&gt;0%&lt;/div&gt;
+&lt;/div&gt;
 
-<script>
+&lt;script&gt;
 let progress = 0;
 function updateProgressBar() {
-    if (progress < 90) {
+    if (progress &lt; 90) {
         progress += 10;
         document.getElementById("progress").style.width = progress + "%";
         document.getElementById("progress").innerText = progress + "%";
@@ -85,8 +80,8 @@ function updateProgressBar() {
 
 function checkStatus() {
     fetch("/job_status")
-        .then(response => response.json())
-        .then(data => {
+        .then(response =&gt; response.json())
+        .then(data =&gt; {
             if (data.status === 'finished') {
                 document.getElementById("progress").style.width = "100%";
                 document.getElementById("progress").innerText = "100%";
@@ -102,13 +97,14 @@ function checkStatus() {
 }
 
 checkStatus();
-</script>
+&lt;/script&gt;
 """
 
 zip_cache = {
     '25298': (25.4383, -100.9737)
 }
 
+# Section A: Ford facilities
 always_visible_ford_zips = [
     '40202', '48134', '83000', '54800'
 ]
@@ -117,6 +113,7 @@ facility_zip_countries = {
     '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx',
 }
 
+# Section B: Plants
 always_visible_plants = [
     '95358', '25315', '76120', '78550', '40160',
     '28208', '30103', '17011', '48150',
@@ -149,7 +146,6 @@ def detect_country(zip_code):
         else:
             return "us"
     return "us"
-
 
 def get_coords(zip_code, country_hint=None):
     cleaned_zip = clean_zip(zip_code)
@@ -203,7 +199,11 @@ def generate_map(data):
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # Always-visible facility markers
+    # === Always-visible facility markers (toggleable groups) ===
+    ford_group = folium.FeatureGroup(name="Always-Visible Ford Facilities")
+    plants_group = folium.FeatureGroup(name="Always-Visible Plants")
+
+    # Ford facilities (blue truck)
     for zip_code in always_visible_ford_zips:
         cleaned_zip = clean_zip(zip_code)
         country_hint = facility_zip_countries.get(cleaned_zip, 'us')
@@ -211,23 +211,28 @@ def generate_map(data):
         if coords:
             folium.Marker(
                 location=coords,
-                popup=f'Facility: {cleaned_zip}',
-                icon=folium.Icon(color='blue', icon='Truck', prefix='fa')
-            ).add_to(m)
-          
-     for zip_code in always_visible_plants:
+                popup=f'Ford Facility: {cleaned_zip}',
+                icon=folium.Icon(color='blue', icon='truck', prefix='fa')
+            ).add_to(ford_group)
+
+    # Plants (gray building)
+    for zip_code in always_visible_plants:
         cleaned_zip = clean_zip(zip_code)
         country_hint = facility_zip_plantcountries.get(cleaned_zip, 'us')
         coords = get_coords(cleaned_zip, country_hint)
         if coords:
             folium.Marker(
                 location=coords,
-                popup=f'Facility: {cleaned_zip}',
-                icon=folium.Icon(color='gray', icon='Building', prefix='fa')
-            ).add_to(m)
-  
+                popup=f'Plant: {cleaned_zip}',
+                icon=folium.Icon(color='gray', icon='building', prefix='fa')
+            ).add_to(plants_group)
 
-    # Create FeatureGroups
+    # Add facility groups to map
+    ford_group.add_to(m)
+    plants_group.add_to(m)
+    # === End facility markers ===
+
+    # Create FeatureGroups for routes
     delivery_group = folium.FeatureGroup(name="Delivery")
     collection_group = folium.FeatureGroup(name="Collection")
     stock_group = folium.FeatureGroup(name="Stock Order")
@@ -267,7 +272,7 @@ def generate_map(data):
             attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
         ).add_to(group)
 
-    # Add groups to map
+    # Add route groups to map
     collection_group.add_to(m)
     delivery_group.add_to(m)
     stock_group.add_to(m)
@@ -279,9 +284,6 @@ def generate_map(data):
     print("Map generation complete.")
     return m.get_root().render()
 
-
-
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -289,7 +291,6 @@ def login():
             session['logged_in'] = True
             return redirect(url_for('form'))
     return render_template_string(login_template)
-
 
 @app.route('/form', methods=['GET', 'POST'])
 def form():
@@ -302,27 +303,26 @@ def form():
         return redirect(url_for('status'))
     return render_template_string(form_template)
 
-
 @app.route('/status')
 def status():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     job_id = session.get('job_id')
     if not job_id:
-        return "<h2>No job found.</h2>"
+        return "&lt;h2&gt;No job found.&lt;/h2&gt;"
     job = Job.fetch(job_id, connection=redis_conn)
     if job.is_failed:
-        return f"<h2>Job failed:</h2><pre>{job.exc_info}</pre>"
+        return f"&lt;h2&gt;Job failed:&lt;/h2&gt;&lt;pre&gt;{job.exc_info}&lt;/pre&gt;"
     if job.is_finished:
         if not job.result:
-            return "<h2>Job finished but returned no result.</h2>"
+            return "&lt;h2&gt;Job finished but returned no result.&lt;/h2&gt;"
+        # NOTE: job.result is HTML, not a URL. We can render it here instead of linking to it.
         return f"""
-            <h2>Map Ready</h2>
-            <a href="{job.result}" target="_blank">View Map</a><br><br>
-            <a href="{url_for('form')}">Back</a>
+            &lt;h2&gt;Map Ready&lt;/h2&gt;
+            &lt;div&gt;{job.result}&lt;/div&gt;
+            &lt;br&gt;&lt;a href="{url_for('form')}"&gt;Back&lt;/a&gt;
         """
     return render_template_string(processing_template)
-
 
 @app.route('/job_status')
 def job_status():
@@ -339,12 +339,6 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
-
-
 
 
 
