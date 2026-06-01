@@ -230,8 +230,20 @@ def generate_map(data):
         else:
             group = other_group
 
-        group.add_child(folium.Marker(location=origin))
-        group.add_child(folium.Marker(location=dest))
+
+origin_icon = CustomIcon(
+    icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+    icon_size=(10, 16)   # 👈 smaller than before
+)
+
+dest_icon = CustomIcon(
+    icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+    icon_size=(10, 16)   # 👈 smaller than before
+)
+
+group.add_child(folium.Marker(location=origin, icon=origin_icon))
+group.add_child(folium.Marker(location=dest, icon=dest_icon))
+
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
         group.add_child(line)
