@@ -6,32 +6,29 @@ import requests
 from folium.plugins import PolyLineTextPath
 from folium.features import CustomIcon
 import re
-import uuid
 from rq import Queue
 from redis import Redis
 from rq.job import Job
+import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-
-import os
-from redis import Redis
-from rq import Queue
 
 # Redis setup
 redis_url = os.getenv('REDIS_URL', 'redis://red-d302k12dbo4c73b72nt0:6379')
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)
 
-# Ensure the static/maps directory exists
+# Ensure map directory exists
 map_dir = os.path.join("static", "maps")
 os.makedirs(map_dir, exist_ok=True)
 
 USERNAME = 'admin'
 PASSWORD = 'password'
 
-login_template = """
-<!doctype html>
+# ------------------ Templates ------------------
+
+login_template = """<!doctype html>
 <title>Login</title>
 <h2>Login</h2>
 <form method='post'>
@@ -41,31 +38,20 @@ login_template = """
 </form>
 """
 
-form_template = """
-<!doctype html>
+form_template = """<!doctype html>
 <title>Paste ZIP Code Data</title>
-<h2>Paste ZIP Code Data (Origin ZIP, Destination ZIP, Delivery Number, Origin Country, Destination Country)</h2>
+<h2>Paste ZIP Code Data</h2>
 <form method='post'>
   <textarea name='data' rows='10' cols='70'></textarea><br>
   <input type='submit' value='Generate Map'>
 </form>
 """
 
-map_template = """
-<!doctype html>
-<title>Delivery Route Map</title>
-<h2>Delivery Route Map</h2>
-<div>{{ map_html|safe }}</div>
-<br>
-<a href='{{ url_for("form") }}'>Back</a>
-"""
-
-processing_template = """
-<!doctype html>
+processing_template = """<!doctype html>
 <title>Processing</title>
 <h2>Map is processing...</h2>
-<div id="progress-bar" style="width: 100% background-color: #f3f3f3">
-  <div id="progress" style="width: 0% height: 30px background-color: #4CAF50 text-align: center line-height: 30px color: white">0%</div>
+<div id="progress-bar" style="width: 100%; background-color: #f3f3f3">
+  <div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white">0%</div>
 </div>
 
 <script>
@@ -80,7 +66,7 @@ function updateProgressBar() {
 
 function checkStatus() {
     fetch("/job_status")
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             if (data.status === 'finished') {
                 document.getElementById("progress").style.width = "100%"
@@ -100,149 +86,110 @@ checkStatus()
 </script>
 """
 
-zip_cache = {
-    '25298': (25.4383, -100.9737)
-}
+# ------------------ Helpers ------------------
 
-# Section A: Ford facilities
-always_visible_ford_zips = [
-    '40202', '48134', '83000', '54800'
-]
-
-facility_zip_countries = {
-    '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx',
-}
-
-# Section B: Plants
-always_visible_plants = [
-    '95358', '25315', '76120', '78550', '40160',
-    '28208', '30103', '17011', '48150',
-    '54937', '55121', 'N3S 7P8'
-]
-
-facility_zip_plantcountries = {
-    '95358': 'us', '25315': 'mx', '76120': 'mx', '35403': 'us',
-    '78550': 'us', '40160': 'us', '28208': 'us', '30103': 'us',
-    '18640': 'us', '37122': 'us', '17011': 'us', '48150': 'us',
-    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
-}
+zip_cache = {}
 
 def clean_zip(zip_code):
-    zip_code = zip_code.strip().upper().replace('"', '').replace("'", '')
-    zip_code = re.sub(r'\s+', ' ', zip_code)
-    return zip_code
+    return re.sub(r'\s+', ' ', zip_code.strip().upper().replace('"','').replace("'",""))
 
 def detect_country(zip_code):
-    # Force ZIP 25903 to be treated as Mexico (COA)
     if zip_code == '25903':
         return "mx"
-
     if re.match(r'^[A-Z]\d[A-Z] ?\d[A-Z]\d$', zip_code):
         return "ca"
     elif re.match(r'^\d{5}$', zip_code):
-        zip_int = int(zip_code)
-        if 1000 <= zip_int <= 99998:
-            return "mx"
-        else:
-            return "us"
+        return "mx" if 1000 <= int(zip_code) <= 99998 else "us"
     return "us"
 
 def get_coords(zip_code, country_hint=None):
-    cleaned_zip = clean_zip(zip_code)
-    if cleaned_zip in zip_cache:
-        return zip_cache[cleaned_zip]
+    cleaned = clean_zip(zip_code)
+
+    if cleaned in zip_cache:
+        return zip_cache[cleaned]
 
     if not country_hint:
-        country_hint = detect_country(cleaned_zip)
+        country_hint = detect_country(cleaned)
 
-    url = f"https://nominatim.openstreetmap.org/search?q={cleaned_zip}&countrycodes={country_hint}&format=json"
-    headers = {'User-Agent': 'RouteMapper/1.0 (your@email.com)'}
-    response = requests.get(url, headers=headers)
+    url = f"https://nominatim.openstreetmap.org/search?q={cleaned}&countrycodes={country_hint}&format=json"
+    headers = {'User-Agent': 'RouteMapper/1.0'}
 
-    if response.status_code == 200 and response.json():
-        lat = float(response.json()[0]['lat'])
-        lon = float(response.json()[0]['lon'])
-        zip_cache[cleaned_zip] = (lat, lon)
-        return (lat, lon)
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data:
+            lat = float(data[0]['lat'])
+            lon = float(data[0]['lon'])
+            zip_cache[cleaned] = (lat, lon)
+            return (lat, lon)
+    except Exception as e:
+        print(f"Geocode error for {zip_code}: {e}")
 
     print(f"Failed to geocode: {zip_code}")
     return None
 
+# ------------------ Core Fix Here ------------------
+
 def generate_map(data):
-    print("Starting map generation...")
+    print("=== START MAP GENERATION ===")
     routes = []
-    seen_pairs = set()
+    seen = set()
 
-    f = StringIO(data)
-    reader = csv.reader(f)
+    reader = csv.reader(StringIO(data), skipinitialspace=True)
+
     for row in reader:
-        print(f"Processing row: {row}")
-        if len(row) >= 3:
-            origin_zip = clean_zip(row[0])
-            dest_zip = clean_zip(row[1])
-            delivery_number = row[2].strip()
-            origin_country = row[3].strip().lower() if len(row) > 3 else None
-            dest_country = row[4].strip().lower() if len(row) > 4 else None
+        print("RAW ROW:", row)
 
-            pair_key = (origin_zip, dest_zip, delivery_number)
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
+        # ✅ strict validation
+        if len(row) < 5:
+            print("Skipping: not enough columns")
+            continue
 
-            origin_coords = get_coords(origin_zip, origin_country)
-            dest_coords = get_coords(dest_zip, dest_country)
-            print(f"Coords: {origin_coords} -> {dest_coords}")
-            if origin_coords and dest_coords:
-                routes.append((origin_coords, dest_coords, delivery_number))
+        origin_zip = clean_zip(row[0])
+        dest_zip = clean_zip(row[1])
+        delivery_number = row[2].strip()
+        origin_country = row[3].strip().lower()
+        dest_country = row[4].strip().lower()
 
-    print(f"Total routes: {len(routes)}")
+        if not origin_zip or not dest_zip:
+            print("Skipping: missing ZIP")
+            continue
+
+        key = (origin_zip, dest_zip, delivery_number)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        origin_coords = get_coords(origin_zip, origin_country)
+        dest_coords = get_coords(dest_zip, dest_country)
+
+        print("Resolved:", origin_coords, dest_coords)
+
+        # ✅ CRITICAL FIX
+        if not origin_coords or not dest_coords:
+            print("Skipping: bad coords")
+            continue
+
+        routes.append((origin_coords, dest_coords, delivery_number))
+
+    print("VALID ROUTES:", len(routes))
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # === Always-visible facility markers (toggleable groups) ===
-    ford_group = folium.FeatureGroup(name="Always-Visible Ford Facilities")
-    plants_group = folium.FeatureGroup(name="Always-Visible Plants")
-
-    # Ford facilities (blue truck)
-    for zip_code in always_visible_ford_zips:
-        cleaned_zip = clean_zip(zip_code)
-        country_hint = facility_zip_countries.get(cleaned_zip, 'us')
-        coords = get_coords(cleaned_zip, country_hint)
-        if coords:
-            folium.Marker(
-                location=coords,
-                popup=f'Ford Facility: {cleaned_zip}',
-                icon=folium.Icon(color='blue', icon='truck', prefix='fa')
-            ).add_to(ford_group)
-
-    # Plants (gray building)
-    for zip_code in always_visible_plants:
-        cleaned_zip = clean_zip(zip_code)
-        country_hint = facility_zip_plantcountries.get(cleaned_zip, 'us')
-        coords = get_coords(cleaned_zip, country_hint)
-        if coords:
-            folium.Marker(
-                location=coords,
-                popup=f'Plant: {cleaned_zip}',
-                icon=folium.Icon(color='gray', icon='building', prefix='fa')
-            ).add_to(plants_group)
-
-    # Add facility groups to map
-    ford_group.add_to(m)
-    plants_group.add_to(m)
-    # === End facility markers ===
-
-    # Create FeatureGroups for routes
-    delivery_group = folium.FeatureGroup(name="Delivery")
+    # Groups
     collection_group = folium.FeatureGroup(name="Collection")
+    delivery_group = folium.FeatureGroup(name="Delivery")
     stock_group = folium.FeatureGroup(name="Stock Order")
     other_group = folium.FeatureGroup(name="Other")
 
     for origin, dest, delivery_number in routes:
-        if delivery_number.startswith("37"):
-            group = collection_group
-        elif delivery_number.startswith("368"):
+
+        # ✅ FIXED ORDER
+        if delivery_number.startswith("368"):
             group = stock_group
+        elif delivery_number.startswith("37"):
+            group = collection_group
         elif delivery_number.startswith("369") or delivery_number.startswith("34"):
             group = delivery_group
         else:
@@ -257,32 +204,28 @@ def generate_map(data):
             icon_size=(12, 20)
         )
 
-        group.add_child(folium.Marker(location=origin, popup='Origin', icon=origin_icon))
-        group.add_child(folium.Marker(location=dest, popup='Destination', icon=dest_icon))
+        group.add_child(folium.Marker(location=origin, icon=origin_icon))
+        group.add_child(folium.Marker(location=dest, icon=dest_icon))
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
-        folium.Popup(f'Delivery #: {delivery_number}', max_width=300, show=True).add_to(line)
         group.add_child(line)
 
         PolyLineTextPath(
-            line,
-            '➤',
-            repeat=False,
-            offset=7,
+            line, '➤', repeat=False, offset=7,
             attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
         ).add_to(group)
 
-    # Add route groups to map
     collection_group.add_to(m)
     delivery_group.add_to(m)
     stock_group.add_to(m)
     other_group.add_to(m)
 
-    # Add layer control
     folium.LayerControl(collapsed=False).add_to(m)
 
-    print("Map generation complete.")
+    print("=== MAP COMPLETE ===")
     return m.get_root().render()
+
+# ------------------ Routes ------------------
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -296,46 +239,40 @@ def login():
 def form():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
+
     if request.method == 'POST':
-        data = request.form['data']
-        job = q.enqueue(generate_map, data, job_timeout=20000)  # <-- Timeout added here
+        job = q.enqueue(generate_map, request.form['data'], job_timeout=20000)
         session['job_id'] = job.id
         return redirect(url_for('status'))
+
     return render_template_string(form_template)
 
 @app.route('/status')
 def status():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    job_id = session.get('job_id')
-    if not job_id:
-        return "<h2>No job found.</h2>"
-    job = Job.fetch(job_id, connection=redis_conn)
+
+    job = Job.fetch(session.get('job_id'), connection=redis_conn)
+
     if job.is_failed:
-        return f"<h2>Job failed:</h2><pre>{job.exc_info}</pre>"
+        return f"<pre>{job.exc_info}</pre>"
+
     if job.is_finished:
-        if not job.result:
-            return "<h2>Job finished but returned no result.</h2>"
-        # NOTE: job.result is HTML, not a URL. We can render it here instead of linking to it.
-        return f"""
-            <h2>Map Ready</h2>
-            <div>{job.result}</div>
-            <br><a href="{url_for('form')}">Back</a>
-        """
+        return f"<div>{job.result}</div><br><a href='/form'>Back</a>"
+
     return render_template_string(processing_template)
 
 @app.route('/job_status')
 def job_status():
-    job_id = session.get('job_id')
-    if not job_id:
-        return jsonify({'status': 'none'})
-    job = Job.fetch(job_id, connection=redis_conn)
+    job = Job.fetch(session.get('job_id'), connection=redis_conn)
+
     if job.is_finished:
         return jsonify({'status': 'finished'})
     elif job.is_failed:
         return jsonify({'status': 'failed'})
-    else:
-        return jsonify({'status': 'in_progress'})
+    return jsonify({'status': 'in_progress'})
+
+# ------------------
 
 if __name__ == '__main__':
     app.run(debug=True)
