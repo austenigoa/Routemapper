@@ -19,7 +19,7 @@ redis_url = os.getenv('REDIS_URL', 'redis://red-d302k12dbo4c73b72nt0:6379')
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)
 
-# Ensure directory
+# Ensure map directory exists
 os.makedirs(os.path.join("static", "maps"), exist_ok=True)
 
 USERNAME = 'admin'
@@ -31,9 +31,9 @@ login_template = """<!doctype html>
 <title>Login</title>
 <h2>Login</h2>
 <form method='post'>
-  Username: <input type='text' name='username'><br>
-  Password: <input type='password' name='password'><br>
-  <input type='submit' value='Login'>
+Username: <input type='text' name='username'><br>
+Password: <input type='password' name='password'><br>
+<input type='submit' value='Login'>
 </form>
 """
 
@@ -41,8 +41,8 @@ form_template = """<!doctype html>
 <title>Paste ZIP Code Data</title>
 <h2>Paste ZIP Code Data</h2>
 <form method='post'>
-  <textarea name='data' rows='10' cols='70'></textarea><br>
-  <input type='submit' value='Generate Map'>
+<textarea name='data' rows='10' cols='70'></textarea><br>
+<input type='submit' value='Generate Map'>
 </form>
 """
 
@@ -50,7 +50,7 @@ processing_template = """<!doctype html>
 <title>Processing</title>
 <h2>Map is processing...</h2>
 <div id="progress-bar" style="width: 100%; background-color: #f3f3f3">
-  <div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white">0%</div>
+<div id="progress" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white">0%</div>
 </div>
 
 <script>
@@ -146,7 +146,7 @@ def get_coords(zip_code, country_hint=None):
 
     return None
 
-# ------------------ Core ------------------
+# ------------------ Map Generation ------------------
 
 def generate_map(data):
     print("=== START MAP ===")
@@ -159,7 +159,7 @@ def generate_map(data):
         print("ROW:", row)
 
         if len(row) < 5:
-            print("Skip: bad column count")
+            print("Skipping: bad column count")
             continue
 
         origin_zip = clean_zip(row[0])
@@ -169,7 +169,7 @@ def generate_map(data):
         dest_country = row[4].strip().lower()
 
         if not origin_zip or not dest_zip:
-            print("Skip: missing zip")
+            print("Skipping: missing ZIP")
             continue
 
         key = (origin_zip, dest_zip, delivery_number)
@@ -181,14 +181,16 @@ def generate_map(data):
         dest = get_coords(dest_zip, dest_country)
 
         if not origin or not dest:
-            print("Skip: bad coords")
+            print("Skipping: invalid coords")
             continue
 
         routes.append((origin, dest, delivery_number))
 
+    print("Valid routes:", len(routes))
+
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # -------- FACILITY GROUPS ----------
+    # -------- Facility Layers --------
     ford_group = folium.FeatureGroup(name="Ford Facilities")
     plant_group = folium.FeatureGroup(name="Plants")
 
@@ -213,7 +215,7 @@ def generate_map(data):
     ford_group.add_to(m)
     plant_group.add_to(m)
 
-    # -------- ROUTES ----------
+    # -------- Route Layers --------
     collection_group = folium.FeatureGroup(name="Collection")
     delivery_group = folium.FeatureGroup(name="Delivery")
     stock_group = folium.FeatureGroup(name="Stock Order")
@@ -230,25 +232,23 @@ def generate_map(data):
         else:
             group = other_group
 
+        origin_icon = CustomIcon(
+            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            icon_size=(10, 16)
+        )
 
-origin_icon = CustomIcon(
-    icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-    icon_size=(10, 16)   # 👈 smaller than before
-)
+        dest_icon = CustomIcon(
+            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+            icon_size=(10, 16)
+        )
 
-dest_icon = CustomIcon(
-    icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-    icon_size=(10, 16)   # 👈 smaller than before
-)
-
-group.add_child(folium.Marker(location=origin, icon=origin_icon))
-group.add_child(folium.Marker(location=dest, icon=dest_icon))
-
+        group.add_child(folium.Marker(location=origin, icon=origin_icon))
+        group.add_child(folium.Marker(location=dest, icon=dest_icon))
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
         group.add_child(line)
 
-        PolyLineTextPath(line, '➤', repeat=False).add_to(group)
+        PolyLineTextPath(line, '➤', repeat=False, offset=7).add_to(group)
 
     collection_group.add_to(m)
     delivery_group.add_to(m)
@@ -257,7 +257,7 @@ group.add_child(folium.Marker(location=dest, icon=dest_icon))
 
     folium.LayerControl(collapsed=False).add_to(m)
 
-    print("=== DONE ===")
+    print("=== MAP COMPLETE ===")
     return m.get_root().render()
 
 # ------------------ Routes ------------------
