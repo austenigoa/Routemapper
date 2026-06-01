@@ -19,9 +19,8 @@ redis_url = os.getenv('REDIS_URL', 'redis://red-d302k12dbo4c73b72nt0:6379')
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)
 
-# Ensure map directory exists
-map_dir = os.path.join("static", "maps")
-os.makedirs(map_dir, exist_ok=True)
+# Ensure directory
+os.makedirs(os.path.join("static", "maps"), exist_ok=True)
 
 USERNAME = 'admin'
 PASSWORD = 'password'
@@ -81,17 +80,37 @@ function checkStatus() {
             }
         })
 }
-
 checkStatus()
 </script>
 """
+
+# ------------------ Facility Sections ------------------
+
+always_visible_ford_zips = ['40202', '48134', '83000', '54800']
+
+facility_zip_countries = {
+    '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx'
+}
+
+always_visible_plants = [
+    '95358', '25315', '76120', '78550', '40160',
+    '28208', '30103', '17011', '48150',
+    '54937', '55121', 'N3S 7P8'
+]
+
+facility_zip_plantcountries = {
+    '95358': 'us', '25315': 'mx', '76120': 'mx',
+    '78550': 'us', '40160': 'us', '28208': 'us',
+    '30103': 'us', '17011': 'us', '48150': 'us',
+    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
+}
 
 # ------------------ Helpers ------------------
 
 zip_cache = {}
 
-def clean_zip(zip_code):
-    return re.sub(r'\s+', ' ', zip_code.strip().upper().replace('"','').replace("'",""))
+def clean_zip(z):
+    return re.sub(r'\s+', ' ', z.strip().upper().replace('"','').replace("'",""))
 
 def detect_country(zip_code):
     if zip_code == '25903':
@@ -112,38 +131,35 @@ def get_coords(zip_code, country_hint=None):
         country_hint = detect_country(cleaned)
 
     url = f"https://nominatim.openstreetmap.org/search?q={cleaned}&countrycodes={country_hint}&format=json"
-    headers = {'User-Agent': 'RouteMapper/1.0'}
 
     try:
-        response = requests.get(url, headers=headers, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+        res = requests.get(url, headers={'User-Agent': 'RouteMapper'}, timeout=5)
+        res.raise_for_status()
+        data = res.json()
         if data:
             lat = float(data[0]['lat'])
             lon = float(data[0]['lon'])
             zip_cache[cleaned] = (lat, lon)
             return (lat, lon)
     except Exception as e:
-        print(f"Geocode error for {zip_code}: {e}")
+        print(f"Geocode error: {zip_code} -> {e}")
 
-    print(f"Failed to geocode: {zip_code}")
     return None
 
-# ------------------ Core Fix Here ------------------
+# ------------------ Core ------------------
 
 def generate_map(data):
-    print("=== START MAP GENERATION ===")
+    print("=== START MAP ===")
     routes = []
     seen = set()
 
     reader = csv.reader(StringIO(data), skipinitialspace=True)
 
     for row in reader:
-        print("RAW ROW:", row)
+        print("ROW:", row)
 
-        # ✅ strict validation
         if len(row) < 5:
-            print("Skipping: not enough columns")
+            print("Skip: bad column count")
             continue
 
         origin_zip = clean_zip(row[0])
@@ -153,7 +169,7 @@ def generate_map(data):
         dest_country = row[4].strip().lower()
 
         if not origin_zip or not dest_zip:
-            print("Skipping: missing ZIP")
+            print("Skip: missing zip")
             continue
 
         key = (origin_zip, dest_zip, delivery_number)
@@ -161,23 +177,43 @@ def generate_map(data):
             continue
         seen.add(key)
 
-        origin_coords = get_coords(origin_zip, origin_country)
-        dest_coords = get_coords(dest_zip, dest_country)
+        origin = get_coords(origin_zip, origin_country)
+        dest = get_coords(dest_zip, dest_country)
 
-        print("Resolved:", origin_coords, dest_coords)
-
-        # ✅ CRITICAL FIX
-        if not origin_coords or not dest_coords:
-            print("Skipping: bad coords")
+        if not origin or not dest:
+            print("Skip: bad coords")
             continue
 
-        routes.append((origin_coords, dest_coords, delivery_number))
-
-    print("VALID ROUTES:", len(routes))
+        routes.append((origin, dest, delivery_number))
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # Groups
+    # -------- FACILITY GROUPS ----------
+    ford_group = folium.FeatureGroup(name="Ford Facilities")
+    plant_group = folium.FeatureGroup(name="Plants")
+
+    for z in always_visible_ford_zips:
+        coords = get_coords(z, facility_zip_countries.get(z, 'us'))
+        if coords:
+            folium.Marker(
+                location=coords,
+                popup=f"Ford: {z}",
+                icon=folium.Icon(color='blue', icon='truck', prefix='fa')
+            ).add_to(ford_group)
+
+    for z in always_visible_plants:
+        coords = get_coords(z, facility_zip_plantcountries.get(z, 'us'))
+        if coords:
+            folium.Marker(
+                location=coords,
+                popup=f"Plant: {z}",
+                icon=folium.Icon(color='gray', icon='building', prefix='fa')
+            ).add_to(plant_group)
+
+    ford_group.add_to(m)
+    plant_group.add_to(m)
+
+    # -------- ROUTES ----------
     collection_group = folium.FeatureGroup(name="Collection")
     delivery_group = folium.FeatureGroup(name="Delivery")
     stock_group = folium.FeatureGroup(name="Stock Order")
@@ -185,7 +221,6 @@ def generate_map(data):
 
     for origin, dest, delivery_number in routes:
 
-        # ✅ FIXED ORDER
         if delivery_number.startswith("368"):
             group = stock_group
         elif delivery_number.startswith("37"):
@@ -195,25 +230,13 @@ def generate_map(data):
         else:
             group = other_group
 
-        origin_icon = CustomIcon(
-            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-            icon_size=(12, 20)
-        )
-        dest_icon = CustomIcon(
-            icon_image='https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-            icon_size=(12, 20)
-        )
-
-        group.add_child(folium.Marker(location=origin, icon=origin_icon))
-        group.add_child(folium.Marker(location=dest, icon=dest_icon))
+        group.add_child(folium.Marker(location=origin))
+        group.add_child(folium.Marker(location=dest))
 
         line = folium.PolyLine([origin, dest], color='blue', weight=3)
         group.add_child(line)
 
-        PolyLineTextPath(
-            line, '➤', repeat=False, offset=7,
-            attributes={'fill': 'blue', 'font-weight': 'bold', 'font-size': '16'}
-        ).add_to(group)
+        PolyLineTextPath(line, '➤', repeat=False).add_to(group)
 
     collection_group.add_to(m)
     delivery_group.add_to(m)
@@ -222,7 +245,7 @@ def generate_map(data):
 
     folium.LayerControl(collapsed=False).add_to(m)
 
-    print("=== MAP COMPLETE ===")
+    print("=== DONE ===")
     return m.get_root().render()
 
 # ------------------ Routes ------------------
@@ -276,3 +299,4 @@ def job_status():
 
 if __name__ == '__main__':
     app.run(debug=True)
+``
