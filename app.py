@@ -136,15 +136,21 @@ def get_coords(zip_code, country_hint=None):
         res = requests.get(url, headers={'User-Agent': 'RouteMapper'}, timeout=5)
         res.raise_for_status()
         data = res.json()
-        if data:
-            lat = float(data[0]['lat'])
-            lon = float(data[0]['lon'])
-            zip_cache[cleaned] = (lat, lon)
-            return (lat, lon)
-    except Exception as e:
-        print(f"Geocode error: {zip_code} -> {e}")
 
-    return None
+        # ✅ NEW: log when no results found
+        if not data:
+            print(f"[GEOCODE FAILED] No result for: {cleaned} (country={country_hint})")
+            return None
+
+        lat = float(data[0]['lat'])
+        lon = float(data[0]['lon'])
+
+        zip_cache[cleaned] = (lat, lon)
+        return (lat, lon)
+
+    except Exception as e:
+        print(f"[GEOCODE ERROR] {cleaned} -> {e}")
+        return None
 
 # ------------------ Map Generation ------------------
 
@@ -152,6 +158,7 @@ def generate_map(data):
     print("=== START MAP ===")
     routes = []
     seen = set()
+    skipped = 0
 
     reader = csv.reader(StringIO(data), skipinitialspace=True)
 
@@ -159,7 +166,7 @@ def generate_map(data):
         print("ROW:", row)
 
         if len(row) < 5:
-            print("Skipping: bad column count")
+            print("[ROW SKIPPED] Bad column count")
             continue
 
         origin_zip = clean_zip(row[0])
@@ -169,7 +176,7 @@ def generate_map(data):
         dest_country = row[4].strip().lower()
 
         if not origin_zip or not dest_zip:
-            print("Skipping: missing ZIP")
+            print("[ROW SKIPPED] Missing ZIP")
             continue
 
         key = (origin_zip, dest_zip, delivery_number)
@@ -181,41 +188,34 @@ def generate_map(data):
         dest = get_coords(dest_zip, dest_country)
 
         if not origin or not dest:
-            print("Skipping: invalid coords")
+            skipped += 1
+            print(f"[ROUTE SKIPPED] {origin_zip} -> {dest_zip} (coords missing)")
             continue
 
         routes.append((origin, dest, delivery_number))
 
-    print("Valid routes:", len(routes))
+    print(f"[SUMMARY] Valid routes: {len(routes)}, Skipped: {skipped}")
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # -------- Facility Layers --------
     ford_group = folium.FeatureGroup(name="Ford Facilities")
     plant_group = folium.FeatureGroup(name="Plants")
 
     for z in always_visible_ford_zips:
         coords = get_coords(z, facility_zip_countries.get(z, 'us'))
         if coords:
-            folium.Marker(
-                location=coords,
-                popup=f"Ford: {z}",
-                icon=folium.Icon(color='blue', icon='truck', prefix='fa')
-            ).add_to(ford_group)
+            folium.Marker(location=coords, popup=f"Ford: {z}",
+                          icon=folium.Icon(color='blue', icon='truck', prefix='fa')).add_to(ford_group)
 
     for z in always_visible_plants:
         coords = get_coords(z, facility_zip_plantcountries.get(z, 'us'))
         if coords:
-            folium.Marker(
-                location=coords,
-                popup=f"Plant: {z}",
-                icon=folium.Icon(color='gray', icon='building', prefix='fa')
-            ).add_to(plant_group)
+            folium.Marker(location=coords, popup=f"Plant: {z}",
+                          icon=folium.Icon(color='gray', icon='building', prefix='fa')).add_to(plant_group)
 
     ford_group.add_to(m)
     plant_group.add_to(m)
 
-    # -------- Route Layers --------
     collection_group = folium.FeatureGroup(name="Collection")
     delivery_group = folium.FeatureGroup(name="Delivery")
     stock_group = folium.FeatureGroup(name="Stock Order")
