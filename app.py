@@ -84,6 +84,27 @@ checkStatus()
 </script>
 """
 
+# ------------------ Facility Sections ------------------
+
+always_visible_ford_zips = ['40202', '48134', '83000', '54800']
+
+facility_zip_countries = {
+    '40202': 'us', '48134': 'us', '83000': 'mx', '54800': 'mx'
+}
+
+always_visible_plants = [
+    '95358', '25315', '76120', '78550', '40160',
+    '28208', '30103', '17011', '48150',
+    '54937', '55121', 'N3S 7P8'
+]
+
+facility_zip_plantcountries = {
+    '95358': 'us', '25315': 'mx', '76120': 'mx',
+    '78550': 'us', '40160': 'us', '28208': 'us',
+    '30103': 'us', '17011': 'us', '48150': 'us',
+    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
+}
+
 # ------------------ Helpers ------------------
 
 zip_cache = {}
@@ -92,12 +113,12 @@ def clean_zip(z):
     return re.sub(r'\s+', ' ', z.strip().upper().replace('"','').replace("'",""))
 
 def detect_country(zip_code):
-    # Canada pattern
+    if zip_code == '25903':
+        return "mx"
     if re.match(r'^[A-Z]\d[A-Z] ?\d[A-Z]\d$', zip_code):
         return "ca"
-    # Default all 5-digit to US
     elif re.match(r'^\d{5}$', zip_code):
-        return "us"
+        return "mx" if 1000 <= int(zip_code) <= 99998 else "us"
     return "us"
 
 def get_coords(zip_code, country_hint=None):
@@ -116,8 +137,9 @@ def get_coords(zip_code, country_hint=None):
         res.raise_for_status()
         data = res.json()
 
+        # ✅ NEW: log when no results found
         if not data:
-            print(f"[GEOCODE FAILED] {cleaned} with hint={country_hint}")
+            print(f"[GEOCODE FAILED] No result for: {cleaned} (country={country_hint})")
             return None
 
         lat = float(data[0]['lat'])
@@ -129,16 +151,6 @@ def get_coords(zip_code, country_hint=None):
     except Exception as e:
         print(f"[GEOCODE ERROR] {cleaned} -> {e}")
         return None
-
-def safe_get_coords(zip_code, country_hint=None):
-    # Try with hint first
-    coords = get_coords(zip_code, country_hint)
-    if coords:
-        return coords
-
-    # Fallback without hint
-    print(f"[RETRY] {zip_code} without country hint")
-    return get_coords(zip_code)
 
 # ------------------ Map Generation ------------------
 
@@ -163,18 +175,21 @@ def generate_map(data):
         origin_country = row[3].strip().lower()
         dest_country = row[4].strip().lower()
 
+        if not origin_zip or not dest_zip:
+            print("[ROW SKIPPED] Missing ZIP")
+            continue
+
         key = (origin_zip, dest_zip, delivery_number)
         if key in seen:
             continue
         seen.add(key)
 
-        # ✅ FIXED HERE
-        origin = safe_get_coords(origin_zip, origin_country)
-        dest = safe_get_coords(dest_zip, dest_country)
+        origin = get_coords(origin_zip, origin_country)
+        dest = get_coords(dest_zip, dest_country)
 
         if not origin or not dest:
             skipped += 1
-            print(f"[ROUTE SKIPPED] {origin_zip} -> {dest_zip}")
+            print(f"[ROUTE SKIPPED] {origin_zip} -> {dest_zip} (coords missing)")
             continue
 
         routes.append((origin, dest, delivery_number))
@@ -182,6 +197,24 @@ def generate_map(data):
     print(f"[SUMMARY] Valid routes: {len(routes)}, Skipped: {skipped}")
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
+
+    ford_group = folium.FeatureGroup(name="Ford Facilities")
+    plant_group = folium.FeatureGroup(name="Plants")
+
+    for z in always_visible_ford_zips:
+        coords = get_coords(z, facility_zip_countries.get(z, 'us'))
+        if coords:
+            folium.Marker(location=coords, popup=f"Ford: {z}",
+                          icon=folium.Icon(color='blue', icon='truck', prefix='fa')).add_to(ford_group)
+
+    for z in always_visible_plants:
+        coords = get_coords(z, facility_zip_plantcountries.get(z, 'us'))
+        if coords:
+            folium.Marker(location=coords, popup=f"Plant: {z}",
+                          icon=folium.Icon(color='gray', icon='building', prefix='fa')).add_to(plant_group)
+
+    ford_group.add_to(m)
+    plant_group.add_to(m)
 
     collection_group = folium.FeatureGroup(name="Collection")
     delivery_group = folium.FeatureGroup(name="Delivery")
