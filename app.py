@@ -6,7 +6,6 @@ import requests
 from folium.plugins import PolyLineTextPath
 from folium.features import CustomIcon
 import re
-import uuid
 from rq import Queue
 from redis import Redis
 from rq.job import Job
@@ -28,21 +27,23 @@ USERNAME = 'admin'
 PASSWORD = 'password'
 
 # -------------------------
-# ✅ FIXED ZIP HANDLING
+# ✅ ZIP HANDLING (FIXED)
 # -------------------------
 
 zip_cache = {
     '25298': (25.4383, -100.9737),
-    '25903': (26.0056, -101.0053)  # ✅ FIXED permanently
+    '25903': (26.0056, -101.0053)  # ✅ Fixed permanently
 }
 
 mx_overrides = {'25903', '25298'}
 ca_pattern = r'^[A-Z]\d[A-Z] ?\d[A-Z]\d$'
 
+
 def clean_zip(zip_code):
     zip_code = zip_code.strip().upper().replace('"', '').replace("'", '')
     zip_code = re.sub(r'\s+', ' ', zip_code)
     return zip_code
+
 
 def detect_country(zip_code):
     zip_code = zip_code.strip().upper()
@@ -58,22 +59,30 @@ def detect_country(zip_code):
 
     return "us"
 
+
 def get_coords(zip_code, country_hint=None):
     cleaned_zip = clean_zip(zip_code)
 
-    # ✅ Cache first
+    # ✅ Cache
     if cleaned_zip in zip_cache:
         print(f"CACHE HIT: {cleaned_zip}")
         return zip_cache[cleaned_zip]
 
-    if not country_hint:
-        country_hint = detect_country(cleaned_zip)
+    detected_country = detect_country(cleaned_zip)
+
+    # ✅ Override bad country inputs
+    if country_hint:
+        if country_hint != detected_country:
+            print(f"WARNING: overriding {country_hint} -> {detected_country} for {cleaned_zip}")
+            country_hint = detected_country
+    else:
+        country_hint = detected_country
 
     headers = {'User-Agent': 'RouteMapper/1.0 (your@email.com)'}
 
-    # ✅ Attempt 1 (with country)
+    # Attempt 1
     url = f"https://nominatim.openstreetmap.org/search?q={cleaned_zip}&countrycodes={country_hint}&format=json"
-    print(f"Geocode attempt 1: {cleaned_zip} ({country_hint})")
+    print(f"Geocode attempt: {cleaned_zip} ({country_hint})")
 
     response = requests.get(url, headers=headers)
 
@@ -83,7 +92,7 @@ def get_coords(zip_code, country_hint=None):
         zip_cache[cleaned_zip] = (lat, lon)
         return (lat, lon)
 
-    # ✅ Attempt 2 (fallback)
+    # Fallback
     print(f"Fallback attempt: {cleaned_zip}")
     url = f"https://nominatim.openstreetmap.org/search?q={cleaned_zip}&format=json"
     response = requests.get(url, headers=headers)
@@ -96,6 +105,25 @@ def get_coords(zip_code, country_hint=None):
 
     print(f"FAILED TO GEOCODE: {cleaned_zip}")
     return None
+
+
+# -------------------------
+# ✅ FACILITY MARKERS (RESTORED)
+# -------------------------
+
+always_visible_zips = [
+    '95358', '25315', '76120', '78550', '40160',
+    '28208', '30103', '17011', '48150',
+    '54937', '55121', 'N3S 7P8'
+]
+
+facility_zip_countries = {
+    '95358': 'us', '25315': 'mx', '76120': 'mx',
+    '35403': 'us', '78550': 'us', '40160': 'us',
+    '28208': 'us', '30103': 'us', '18640': 'us',
+    '37122': 'us', '17011': 'us', '48150': 'us',
+    '54937': 'us', '55121': 'us', 'N3S 7P8': 'ca'
+}
 
 
 # -------------------------
@@ -163,8 +191,9 @@ checkStatus();
 </script>
 """
 
+
 # -------------------------
-# MAP GENERATION
+# ✅ MAP GENERATION
 # -------------------------
 
 def generate_map(data):
@@ -195,6 +224,20 @@ def generate_map(data):
                 routes.append((origin_coords, dest_coords, delivery_number))
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
+
+    # ✅ RESTORED ALWAYS-VISIBLE FACILITIES
+    for zip_code in always_visible_zips:
+        cleaned_zip = clean_zip(zip_code)
+        country_hint = facility_zip_countries.get(cleaned_zip, detect_country(cleaned_zip))
+
+        coords = get_coords(cleaned_zip, country_hint)
+
+        if coords:
+            folium.Marker(
+                location=coords,
+                popup=f'Facility: {cleaned_zip}',
+                icon=folium.Icon(color='gray', icon='building', prefix='fa')
+            ).add_to(m)
 
     delivery_group = folium.FeatureGroup(name="Delivery")
     collection_group = folium.FeatureGroup(name="Collection")
