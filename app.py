@@ -54,7 +54,6 @@ def detect_country(zip_code):
     if re.match(ca_pattern, zip_code):
         return "ca"
 
-    # keep default behavior but clarify intent
     if re.match(r'^\d{5}$', zip_code):
         return "us"
 
@@ -81,7 +80,6 @@ def get_coords(zip_code, country_hint=None):
 
     headers = {'User-Agent': 'RouteMapper/1.0 (your@email.com)'}
 
-    # ✅ STEP 1: Structured query with postalcode
     params = {
         "postalcode": cleaned_zip,
         "countrycodes": country_hint,
@@ -100,15 +98,24 @@ def get_coords(zip_code, country_hint=None):
     if response.status_code == 200 and response.json():
         data = response.json()[0]
 
-        # ✅ STEP 3: Country validation safeguard
-        if country_hint not in data.get("display_name", "").lower():
+        # ✅ FIXED validation logic
+        display_name = data.get("display_name", "").lower()
+
+        valid = False
+        if country_hint == "us" and "united states" in display_name:
+            valid = True
+        elif country_hint == "mx" and ("mexico" in display_name or "méxico" in display_name):
+            valid = True
+        elif country_hint == "ca" and "canada" in display_name:
+            valid = True
+
+        if not valid:
             print(f"REJECTED (wrong country): {cleaned_zip} -> {data.get('display_name')}")
             return None
 
         lat = float(data['lat'])
         lon = float(data['lon'])
 
-        # ✅ STEP 5: Debug logging
         print(f"RESULT: {cleaned_zip} -> {lat}, {lon} | {data.get('display_name')}")
 
         zip_cache[cleaned_zip] = (lat, lon)
@@ -236,7 +243,6 @@ def generate_map(data):
 
     m = folium.Map(location=[39.5, -98.35], zoom_start=4)
 
-    # ✅ RESTORED ALWAYS-VISIBLE FACILITIES
     for zip_code in always_visible_zips:
         cleaned_zip = clean_zip(zip_code)
         country_hint = facility_zip_countries.get(cleaned_zip, detect_country(cleaned_zip))
