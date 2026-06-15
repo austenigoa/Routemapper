@@ -32,7 +32,7 @@ PASSWORD = 'password'
 
 zip_cache = {
     '25298': (25.4383, -100.9737),
-    '25903': (26.0056, -101.0053)  # ✅ Fixed permanently
+    '25903': (26.0056, -101.0053)
 }
 
 mx_overrides = {'25903', '25298'}
@@ -54,6 +54,7 @@ def detect_country(zip_code):
     if re.match(ca_pattern, zip_code):
         return "ca"
 
+    # keep default behavior but clarify intent
     if re.match(r'^\d{5}$', zip_code):
         return "us"
 
@@ -80,26 +81,36 @@ def get_coords(zip_code, country_hint=None):
 
     headers = {'User-Agent': 'RouteMapper/1.0 (your@email.com)'}
 
-    # Attempt 1
-    url = f"https://nominatim.openstreetmap.org/search?q={cleaned_zip}&countrycodes={country_hint}&format=json"
+    # ✅ STEP 1: Structured query with postalcode
+    params = {
+        "postalcode": cleaned_zip,
+        "countrycodes": country_hint,
+        "format": "json",
+        "limit": 1
+    }
+
     print(f"Geocode attempt: {cleaned_zip} ({country_hint})")
 
-    response = requests.get(url, headers=headers)
+    response = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        headers=headers,
+        params=params
+    )
 
     if response.status_code == 200 and response.json():
-        lat = float(response.json()[0]['lat'])
-        lon = float(response.json()[0]['lon'])
-        zip_cache[cleaned_zip] = (lat, lon)
-        return (lat, lon)
+        data = response.json()[0]
 
-    # Fallback
-    print(f"Fallback attempt: {cleaned_zip}")
-    url = f"https://nominatim.openstreetmap.org/search?q={cleaned_zip}&format=json"
-    response = requests.get(url, headers=headers)
+        # ✅ STEP 3: Country validation safeguard
+        if country_hint not in data.get("display_name", "").lower():
+            print(f"REJECTED (wrong country): {cleaned_zip} -> {data.get('display_name')}")
+            return None
 
-    if response.status_code == 200 and response.json():
-        lat = float(response.json()[0]['lat'])
-        lon = float(response.json()[0]['lon'])
+        lat = float(data['lat'])
+        lon = float(data['lon'])
+
+        # ✅ STEP 5: Debug logging
+        print(f"RESULT: {cleaned_zip} -> {lat}, {lon} | {data.get('display_name')}")
+
         zip_cache[cleaned_zip] = (lat, lon)
         return (lat, lon)
 
